@@ -4,11 +4,11 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Iterations | 1 |
-| Challenges Completed | 1 |
-| Total Tests Written | 87 |
-| Total Tests Passing | 87 |
-| Avg Time per Challenge | ~2m 23s |
+| Total Iterations | 2 |
+| Challenges Completed | 2 |
+| Total Tests Written | 160 |
+| Total Tests Passing | 160 |
+| Avg Time per Challenge | ~4m 35s |
 | First-Attempt Pass Rate | 100% |
 | Bugs Found & Fixed | 0 |
 | Process Improvements Made | 0 |
@@ -19,3 +19,4 @@
 | # | Challenge | Result | Time | Tests | Bugs | Process Improvement |
 |---|-----------|--------|------|-------|------|-------------------|
 | 1 | Data Structures Library | ✅ Pass | 2m 23s | 87/87 | 0 | — |
+| 2 | Async Utility Library | ✅ Pass | ~4m | 73/73 | 0 | Timing tolerance: use ±80ms for VPS reliability |
