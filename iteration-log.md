@@ -85,3 +85,30 @@
   - Port 0 for tests: `server.listen(0)` makes OS assign a free port — completely eliminates port-collision failures in parallel test runs.
   - `fetch()` with `redirect: 'manual'` is required to inspect redirect responses (302) without following them.
   - Error middleware uses 4-arity `(err, req, res, next)` — must detect this by `fn.length === 4` to separate error handlers from normal middleware at registration time.
+
+---
+
+## Iteration 5 — Challenge 005: Self-Hosting Test Framework (META)
+
+- **Started:** 2026-02-17T11:10:00Z
+- **Completed:** 2026-02-17T11:18:00Z
+- **Self-tests:** 72 written, 72 passing (first run — zero failures)
+- **Time to first green:** ~8 minutes
+- **Bugs found during dev:** 0 (clean first run)
+- **Implementation notes:**
+  - `runner.js`: `Runner` class wraps a suite tree; DSL functions (`describe/it/beforeEach/afterEach/beforeAll/afterAll`) are closures that delegate to the runner; `createRunner()` factory returns the DSL + `run()` + `reset()`. Key design: `only` mode is a two-pass system — first `#checkHasOnly()` walks the entire tree to detect any `only` flag, then `#runSuite()` skips suites/tests that don't match.
+  - `assertions.js`: `Expectation` class with private `#value` and `#negated`; `get not` returns a new `Expectation(value, !negated)`; `#assert(pass, failMsg, negateMsg)` handles both polarities. `deepEqual()` is a recursive structural comparator handling primitives, null, arrays, and plain objects.
+  - `mock.js`: `MockFunction` constructor returns the callable function itself (not `this`) — this is the key design choice that lets `fn()` return a callable with attached properties. Used `Object.defineProperty` for `calls/callCount/lastCall` getters; `spyOn` wraps original with a call-through implementation and adds `mockRestore`.
+  - `async.js`: `runWithTimeout` uses a Promise race pattern with `setTimeout`; handles both sync functions (detected by checking if result has `.then`) and async functions without needing `async` detection.
+  - `reporter.js`: `Reporter` class with injected `out` stream for testability; ANSI codes are raw escape sequences (no deps); failure list is accumulated during the run and printed at the end with stack traces.
+  - `discovery.js`: recursive `walk()` with `readdir`/`stat`; skips `node_modules`/`.git`/dotfiles; returns sorted paths for deterministic order.
+  - `watch.js`: `fs.watch` with `recursive: true`; debounce via `setTimeout`/`clearTimeout`; `pendingFiles` Set accumulates all changed files during the debounce window and delivers them together.
+  - `index.js`: flat re-export of all public APIs.
+  - `self-test.js`: 72 tests across 9 describe groups; uses sub-runners (via `createRunner()`) with a captured string reporter to test reporter output and skip/only behavior in isolation. Top-level `await run()` at module level (ESM top-level await).
+- **Learnings:**
+  - **Self-hosting design pattern:** To test the reporter and skip/only behavior, create a sub-runner with an in-memory reporter (capture output as string). This avoids polluting the real test output while still verifying behavior.
+  - **MockFunction returns itself, not `this`:** The constructor trick — `const mockFn = function(){...}; ...; return mockFn;` — makes `fn()` return a callable function with methods attached. Returning `this` from a constructor is rarely right; returning a different value is the escape hatch.
+  - **Top-level await in ESM:** `await run()` at the top level of an ESM module is valid and clean. No need to wrap in `(async () => {})()`.
+  - **only mode needs two passes:** You must scan the ENTIRE tree first to detect any `only` flag, then use that to gate execution. Doing it in one pass risks running non-only tests in suites that appear before the only-marked one.
+  - **afterEach must run even on test failure:** Wrap the test in try/catch, then run afterEach regardless. Track the test error separately and report it after hooks complete.
+  - **Nested beforeEach propagation:** Accumulate hooks as `[...parentBeforeEach, ...suite.beforeEachHooks]` before recursing into child suites. This naturally propagates outer hooks to inner tests.

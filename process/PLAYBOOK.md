@@ -121,3 +121,40 @@
 - **Always verify file content before running tests** when multiple files are written in a session.
 - Stale/cached file versions can silently persist and cause mysterious test failures.
 - Use `head -5 filename` or read the file after writing to confirm the expected content is there.
+
+## Test Framework Architecture (learned Iteration 5)
+
+### Self-Hosting Design
+- To test the reporter and skip/only behavior of the framework itself, create a **sub-runner** with an in-memory string reporter.
+- `createRunner()` factory pattern: each call creates an isolated runner instance with its own state — enables nested test frameworks without global state pollution.
+- The reporter is injected (not imported as a singleton) — making it swap-able for testing.
+
+### MockFunction Constructor Pattern
+- The mock constructor builds a regular function (`const mockFn = function(){...}`) and attaches properties directly to it.
+- Returning `mockFn` from the constructor overrides `this` — the caller gets the callable, not the instance.
+- This is preferable to `class extends Function` (which has engine-specific quirks).
+- Use `Object.defineProperty` for computed getters (`calls`, `callCount`, `lastCall`) to keep the mock's internal state truly private.
+
+### Two-Pass `only` Detection
+- Before executing any test, scan the ENTIRE suite tree to detect any `only` flags (`#checkHasOnly()`).
+- Use the result as a single `hasOnly: boolean` flag passed down through `#runSuite()`.
+- Without the two-pass approach, you might execute non-only tests in suites that appear before the only-marked one.
+
+### Lifecycle Hook Propagation
+- Accumulate `beforeEach`/`afterEach` hooks as `[...parentHooks, ...suiteHooks]` when recursing.
+- `afterEach` reversal: reverse order (innermost first) by building as `[...suite.afterEachHooks, ...parentAfterEach]`.
+- **Run afterEach even on test failure** — wrap test in try/catch, store error, run hooks, then report.
+
+### ESM Top-Level Await
+- `await run()` at the top level of an ESM self-test file is clean and valid — no IIFE needed.
+- `process.exit(stats.failed > 0 ? 1 : 0)` ensures CI gets a proper exit code.
+
+### Timeout with Mixed Sync/Async
+- Don't require `async` keyword detection — just check if the return value has `.then`.
+- Sync functions resolve immediately in the same microtask; the timeout timer is cancelled before it can fire.
+- This handles sync, async, and generator functions uniformly.
+
+### Zero-Dependency ANSI Reporter
+- Raw escape codes: `\x1b[32m` (green), `\x1b[31m` (red), `\x1b[33m` (yellow), `\x1b[0m` (reset).
+- Store failures during the run; print details AFTER the summary line (avoids interleaving with live output).
+- Stack trace: split on `\n`, skip first line (message duplicate), take first 5 frames to keep output readable.
