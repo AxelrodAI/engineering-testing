@@ -88,6 +88,38 @@
 
 ---
 
+## Iteration 6 — Challenge 006: Static Code Analyzer
+
+- **Started:** 2026-02-17T11:16:00Z
+- **Completed:** 2026-02-17T11:35:00Z
+- **Tests:** 79 written, 79 passing (first run after one bug fix)
+- **Time to first green:** ~15 minutes (one bug fix required)
+- **Bugs found during dev:** 1 (default param `{}` mistaken for function body brace)
+- **Implementation notes:**
+  - `tokenizer.js`: State-machine tokenizer using greedy operator matching (longest match first). Disambiguates `/` as regex vs division by tracking the last significant token — regex follows operators/keywords/open punctuation, division follows values. Handles template literals with `${...}` nesting (depth counter), escape sequences, and all number formats (hex/binary/octal/BigInt).
+  - `complexity.js`: Two-phase approach: (1) `discoverFunctions()` pre-scans tokens to find each function's actual body `{` by skipping the parameter list (finding matching `)`), then (2) walks the body counting branches. This correctly handles `function f(opts = {})` — the `{}` in default params is not mistaken for the function body.
+  - `dead-code.js`: Walks tokens tracking brace depth. For each jump keyword (`return/throw/break/continue`), checks whether it's inside a braceless control-flow (`if (x) return;`) via backward scan for `)` closing a condition. Scans forward properly through nested braces to handle `return { ... };` without false positives.
+  - `style-checker.js`: Line-level and token-level checks. Camel-case validator uses regex to allow camelCase, PascalCase, SCREAMING_SNAKE_CASE, _private, $prefixed. Property access (after `.`) and import specifiers are whitelisted.
+  - `dependency-mapper.js`: Token-walk parser for ESM `import/export from`, `require()`, and dynamic `import()`. Builds adjacency list; circular detection via DFS with a `inStack` Set tracking the current path.
+  - `reporter.js`: ANSI color helper with `c(color, text)` pattern. `toJSON` converts `Map` → plain object for serialization. `toHuman` groups style issues by rule, shows max 5 per rule.
+  - `index.js`: `analyze(source, options)` — tokenizes then runs all sub-analyzers. `analyzeFiles([])` for cross-file dep analysis.
+- **Self-analysis of own codebase (challenges 001–005 + 006):**
+  - **`solutions/002-async-patterns/retry.js`**: `retry()` cyclomatic complexity = 13 (high) — the function handles 5 orthogonal concerns (retries, backoff, jitter, abort signal, filter) making it inherently complex.
+  - **`solutions/003-cli-framework/validate.js`**: `validate()` complexity = 30 (very high!) and `solutions/003-cli-framework/parser.js`: `parse()` = 21 — these are the most complex functions in the codebase.
+  - **`solutions/005-test-framework/watch.js`**: 3× `console.error` style violations — real production code using console for error reporting.
+  - **Own code (challenge 006)**: The analyzer correctly self-reports: `tokenize()` complexity = 100 (honest!), `parseImports()` = 42, `detectDeadCode()` = 29.
+  - **Circular deps**: None detected in any challenge solution.
+- **Bugs fixed:**
+  - **Default param `{}`**: `function f(opts = {})` — the `{}` in default parameters was being treated as the function body opening brace, giving complexity = 1 for everything. Fixed by pre-scanning to find the actual body `{` after the closing `)` of parameters.
+- **Learnings:**
+  - **Regex vs division disambiguation**: The last-significant-token rule works well — regex follows operators/keywords; division follows values/identifiers/closing delimiters.
+  - **Default parameters with `{}`**: Always find the function body `{` by first matching the `(...)` parameter list, then looking for `{` after the `)`. Never just look for the first `{` after `function`.
+  - **Return object literal false positive**: `return { ... }` — the `{` is an object literal, not a new scope. Fix: track nesting depth (with `{[(`/`}])`) while scanning forward through the return expression; only stop at `;` or a `}` that closes the containing scope.
+  - **Braceless control flow false positive**: `if (x) return;` — the `return` is conditional, so the next statement is NOT dead. Fix: scan backward from the jump keyword; if the preceding `)` closes a control-flow condition (`if`/`while`/`for`), skip dead-code reporting.
+  - **Cyclomatic complexity ≠ code quality**: High CC functions in this codebase (validate=30, parse=21) are appropriate for their job — they handle many edge cases. CC is a signal, not a verdict.
+
+---
+
 ## Iteration 5 — Challenge 005: Self-Hosting Test Framework (META)
 
 - **Started:** 2026-02-17T11:10:00Z

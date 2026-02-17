@@ -158,3 +158,37 @@
 - Raw escape codes: `\x1b[32m` (green), `\x1b[31m` (red), `\x1b[33m` (yellow), `\x1b[0m` (reset).
 - Store failures during the run; print details AFTER the summary line (avoids interleaving with live output).
 - Stack trace: split on `\n`, skip first line (message duplicate), take first 5 frames to keep output readable.
+
+## Static Code Analyzer Patterns (learned Iteration 6)
+
+### Tokenizer: Regex vs Division Disambiguation
+- `/` is a regex literal if the last significant (non-comment) token was: an operator, keyword (except `this/true/false/null`), `(`, `[`, `{`, or the start of file.
+- `/` is division if the last significant token was: identifier, number, string, template, regex, `)`, `]`, `}`, or value keywords.
+- Store `lastSignificant` and update it for every non-whitespace, non-comment token.
+
+### Tokenizer: Operator Matching
+- Always match longest operators first (sort by length descending).
+- `...`, `===`, `!==`, `>>=` etc. must be checked before `=`, `!`, `>`.
+- Template literals: track `${...}` nesting depth inside the backtick string; only close on `` ` `` when depth === 0.
+
+### Complexity: Skip Parameters Before Finding Function Body
+- `function f(opts = {})` — the `{}` in default parameters is NOT the function body.
+- Algorithm: find the `(` after `function`/name, skip to the matching `)`, then the next `{` is the body.
+- Use `findMatchingParen()` helper to count nested parens correctly.
+- Pre-scan all function definitions first, then walk each body independently.
+
+### Dead Code: Handle Nested Braces in Return Expressions
+- `return { a: 1, b: [1, 2] };` — the `{`, `[` are part of the expression, not new scopes.
+- While scanning forward to find the end of a jump statement, track `nestDepth` for `{([` and `})]`.
+- Only stop when hitting `;` at `nestDepth === 0`, or a `}` that closes the containing scope.
+
+### Dead Code: Braceless Control Flow False Positive
+- `if (x) return;` — the `return` is conditional; the next statement is NOT dead.
+- Before reporting dead code, look backward from the jump keyword.
+- If the nearest preceding `)` at the same brace depth closes an `if/while/for` condition → skip.
+- Stop backward scan at `{` (entered a block) or `;` (new statement) — then the jump IS standalone.
+
+### Self-Analysis is Valuable
+- Running the analyzer on its own code caught real issues: `console.error` in watch.js, high-CC functions.
+- The analyzer correctly self-reports: `tokenize()` CC = 100 — honest and useful.
+- High CC alone isn't a bug: `validate()` CC=30 is appropriate for validation logic; use it as a signal.
