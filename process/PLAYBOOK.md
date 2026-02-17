@@ -88,3 +88,36 @@
 - Never use chalk in zero-dep modules; ANSI escape codes are simple: `\x1b[${code}m${text}\x1b[0m`.
 - Always provide `stripAnsi()` for plain-text output and length measurement (column alignment).
 - `compose(...fns)` allows declarative style combinations: `compose(bold, red)('error')`.
+
+## HTTP Framework Patterns (learned Iteration 4)
+
+### Port 0 for Integration Tests
+- `server.listen(0)` asks the OS to assign a free port — eliminates all port-collision failures.
+- Retrieve the assigned port via `server.address().port` after the listen callback fires.
+- This pattern is essential for parallel test suites that each spin up a server.
+
+### Wildcard Regex in Route Compilers
+- Escape special chars (`.+?^${}()|[\]\\`) FIRST, leaving `*` and `:` alone.
+- Then replace `:name` with `([^/]+)` and `*` with `(.*)` in a second pass.
+- Common trap: using `\\\*` (matches literal `\*`) instead of `\*` (matches literal `*`).
+- The correct regex for a path like `/files/*` is `^/files/(.*)(?:/)?$`.
+
+### Middleware Architecture
+- **Normal middleware:** 3-arity `(req, res, next)` — detect at registration via `fn.length !== 4`.
+- **Error middleware:** 4-arity `(err, req, res, next)` — detect at registration via `fn.length === 4`.
+- Store them in separate arrays; error middleware is only invoked when `next(err)` is called.
+- Wrap every handler in try/catch AND `.catch()` to handle both sync throws and async rejection.
+
+### Testing HTTP Redirects with fetch()
+- `fetch(url, { redirect: 'manual' })` returns the redirect response (3xx) without following it.
+- Default `fetch` follows redirects — you'll get 200 instead of 302 if you forget `redirect: 'manual'`.
+
+### Static File Serving Safety
+- Always `path.resolve()` both root and request path, then check `.startsWith(absRoot)` before serving.
+- Use `statSync` with try/catch (or `existsSync`) rather than always throwing 404.
+- `Content-Length` must be set for HEAD requests to return headers correctly.
+
+### Workspace File Integrity
+- **Always verify file content before running tests** when multiple files are written in a session.
+- Stale/cached file versions can silently persist and cause mysterious test failures.
+- Use `head -5 filename` or read the file after writing to confirm the expected content is there.

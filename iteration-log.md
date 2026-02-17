@@ -62,3 +62,26 @@
   - Stream injection (`input:`/`output:` options) is the right pattern for testable interactive prompts — no mocking needed
   - readline `terminal: false` is essential when piping mock streams — prevents readline from treating input as a TTY
   - `createInterface` fires 'close' after last 'line', so guard with `answered` boolean to avoid double-resolving promises
+
+---
+
+## Iteration 4 — Challenge 004: Micro HTTP Framework
+
+- **Started:** 2026-02-17T10:59:00Z
+- **Completed:** 2026-02-17T11:07:00Z
+- **Tests:** 57 written, 57 passing
+- **Bugs found during dev:** 3 (pre-test: stale file versions in workspace)
+- **Implementation notes:**
+  - `router.js`: path param (`:id`) and wildcard (`*`) compilation via regex; `all()` method for any-method routes; `routes` getter for introspection; optional trailing slash tolerance; URL-decode param values.
+  - `request.js`: `wrapRequest()` attaches `pathname`, `params`, `query` to IncomingMessage; `parseBody()` reads stream, auto-detects content-type (JSON/URL-encoded/text/binary Buffer).
+  - `response.js`: `wrapResponse()` adds `json()`, `send()`, `status()`, `redirect()`, `set()` to ServerResponse; all chainable.
+  - `middleware.js`: `cors()` — wildcard/string/array origins, preflight 204, credentials, maxAge; `bodyParser()` — wraps `parseBody` as middleware, auto-skips GET/HEAD; `staticFiles()` — MIME detection, path traversal prevention, directory index, HEAD support, Cache-Control.
+  - `framework.js`: `App` class wires parser → middleware chain → router → error chain; async handlers wrapped in try/catch + `.catch()`; `listen(port=0)` for OS-assigned port; `close()` for clean teardown.
+  - **Benchmark:** 1000 sequential requests — 0 failures; 1000 concurrent (batches of 50) — 2058 req/s, 486ms total.
+- **Process bug:** Several files were unexpectedly stale (different version) in the workspace. Always read file content before running tests when files were previously written.
+- **Learnings:**
+  - Wildcard regex: `*` must NOT be in the escape set for the initial char-class replace, then replaced with `(.*)` separately. Confusingly, `\\\*` (regex for literal `\*`) vs `/\*/g` (regex for `*`) is a common off-by-one error in escape chaining.
+  - `routes` as getter vs method: `app.routes` (getter) is more ergonomic than `app.routes()` (method). When the underlying field is a getter, delegating via another getter just works.
+  - Port 0 for tests: `server.listen(0)` makes OS assign a free port — completely eliminates port-collision failures in parallel test runs.
+  - `fetch()` with `redirect: 'manual'` is required to inspect redirect responses (302) without following them.
+  - Error middleware uses 4-arity `(err, req, res, next)` — must detect this by `fn.length === 4` to separate error handlers from normal middleware at registration time.
