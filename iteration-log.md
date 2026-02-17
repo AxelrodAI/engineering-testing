@@ -40,3 +40,25 @@
   - Worker-loop (pool) is cleaner than Promise.all(semaphore) for large task arrays — no extra allocations, straightforward ordering.
   - AbortSignal in retry requires patching both the per-attempt check AND the sleep, otherwise an abort during sleep silently ignores the signal.
   - Timing tests: ±80ms tolerance was sufficient on this VPS; narrower tolerances can cause spurious CI failures under load.
+
+---
+
+## Iteration 3 — Challenge 003: Mini CLI Framework
+
+- **Started:** 2026-02-17T10:52:00Z
+- **Completed:** 2026-02-17T10:56:30Z
+- **Tests:** 139 written, 139 passing
+- **Bugs found during dev:** 3 test expectation mismatches (parser behaviour, not implementation bugs)
+- **Implementation notes:**
+  - `parser.js`: pure argv parser — no schema needed; kebab→camelCase, `--flag=value`, `--no-flag` negation, `-abc` combined short flags, `--` end-of-flags; key design: space-sep flags consume next non-flag token as value (schema-less ambiguity is documented in tests)
+  - `registry.js`: private `#commands` Map; chainable `register()`; typed `run()` delegates to handler with (flags, args, ctx)
+  - `validate.js`: schema-driven — applies alias resolution, type coercion (string/number/boolean), defaults, required checks, enum constraints; extra flags pass through
+  - `help.js`: ANSI-aware `generateHelp()` / `generateCommandHelp()`; auto-aligns columns; handles null command gracefully
+  - `color.js`: pure ANSI helpers — red/green/yellow/blue/magenta/cyan/white/bold/dim/italic/underline; `stripAnsi()` regex; `compose()` for function chaining
+  - `prompt.js`: readline-based confirm/select/input with stream injection for testability; `mockInput()` + `nullOutput()` make prompt tests hermetic (no process.stdin)
+  - `index.js`: `createCLI()` factory wires parser → validate → registry; `--help`/`--version`/unknown-command handling; `exit` injectable for test isolation
+- **Learnings:**
+  - Schema-less parsers can't distinguish `--flag nextPositional` from `--flag value` — document this clearly in tests; use `--flag=value` form or place command before flags to avoid ambiguity
+  - Stream injection (`input:`/`output:` options) is the right pattern for testable interactive prompts — no mocking needed
+  - readline `terminal: false` is essential when piping mock streams — prevents readline from treating input as a TTY
+  - `createInterface` fires 'close' after last 'line', so guard with `answered` boolean to avoid double-resolving promises

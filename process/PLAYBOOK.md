@@ -64,3 +64,27 @@
 | Lines of code | Complexity indicator |
 | Test count | Coverage signal |
 | Attempts to pass | Iteration efficiency |
+
+## CLI Parser Design (learned Iteration 3)
+
+### Schema-Less vs. Schema-Aware Parsers
+- A schema-less parser **cannot** distinguish `--flag nextToken` (flag with value) from `--flag` (boolean) + `nextToken` (positional) without external info.
+- **Design rule:** In schema-less mode, any non-flag token following a `--flag` is consumed as its value. Document this prominently.
+- **Workarounds for callers:** use `--flag=value` form, or place commands before flags, or use `--` separator.
+- If you want schema-aware parsing, pass the schema to the parser (boolean flags skip value consumption).
+
+### Testing Interactive Prompts
+- Inject streams: `confirm(q, { input: mockInput('y'), output: nullOutput() })` — no process.stdin mocking needed.
+- `readline.createInterface` requires `terminal: false` when using non-TTY streams (mock Readables) to avoid ANSI handling.
+- Guard resolve/reject with an `answered` boolean — readline fires 'close' after 'line', which would double-resolve without the guard.
+- `Readable.from(['y\n'])` is the cleanest mock stream — works with readline's line-splitting.
+
+### CLI Factory Pattern
+- Inject `exit` and `output` into the CLI factory for test isolation — never call `process.exit()` directly in library code.
+- Wire: `parse(argv)` → `validate(flags, schema)` → `registry.run(cmd, values, args)`.
+- `--help` and `--version` are handled before command lookup — they short-circuit all validation.
+
+### ANSI Color Helpers
+- Never use chalk in zero-dep modules; ANSI escape codes are simple: `\x1b[${code}m${text}\x1b[0m`.
+- Always provide `stripAnsi()` for plain-text output and length measurement (column alignment).
+- `compose(...fns)` allows declarative style combinations: `compose(bold, red)('error')`.
