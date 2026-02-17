@@ -1,0 +1,13 @@
+{
+  "name": "engineering-testing",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Autonomous agentic development laboratory",
+  "scripts": {
+    "test": "node --test solutions/**/*.test.js",
+    "test:verbose": "node --test --test-reporter spec solutions/**/*.test.js",
+    "lint": "node tools/lint.js",
+    "metrics": "node tools/metrics.js",
+    "iterate": "node tools/iterator.js"
+  }
+}
